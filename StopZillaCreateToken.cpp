@@ -13,8 +13,9 @@ Fixed Version    - 0day
 Fixed driver ver - 0day
 Modified version by Decoder:
 
+- Creates a token for the current user and adds several group memberships and privileges
 - does not rely on the SeAssignPrimaryprivilege but uses the current thread in order to add the current user to local admin group
-- on Windows versions >= 1809 set the AuthenticatioID to  ANONYMOUS_LOGON_LUID, you can still user CreateFile and RegSetKey ....
+- on Windows versions >= 1809 set the AuthenticatioID to  ANONYMOUS_LOGON_LUID, you can still use CreateFile and RegSetKey ....
 
 */
 
